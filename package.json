@@ -1,0 +1,12 @@
+{
+  "name": "chip8-studio",
+  "version": "1.0.0",
+  "description": "在瀏覽器裡寫、組譯、執行、除錯 CHIP-8 程式",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "serve": "python3 -m http.server 8000"
+  },
+  "license": "MIT"
+}
