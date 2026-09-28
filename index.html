@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIP-8 Studio</title>
+<meta name="description" content="在瀏覽器裡寫、組譯、執行、除錯 CHIP-8 程式">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%231f3d2b'/%3E%3Crect x='3' y='3' width='4' height='4' fill='%23e6e6e6'/%3E%3Crect x='9' y='9' width='4' height='4' fill='%23e6e6e6'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="file-warning" class="banner" hidden>
+  直接雙擊開啟 index.html 時,瀏覽器會擋住模組載入。請在此資料夾執行
+  <code>python3 -m http.server 8000</code>,再開啟 http://localhost:8000/。
+</div>
+
+<header class="top">
+  <div class="wrap">
+    <h1>CHIP-8 Studio</h1>
+    <p>在瀏覽器裡寫、組譯、執行、除錯 CHIP-8 程式</p>
+  </div>
+</header>
+
+<main class="layout wrap">
+  <!-- 畫面 -->
+  <section class="pane" id="pane-screen" aria-labelledby="h-screen">
+    <h2 id="h-screen">畫面</h2>
+    <div class="stage">
+      <canvas id="screen" width="64" height="32" tabindex="0"
+        aria-label="CHIP-8 畫面。點一下之後可以用鍵盤 1234 QWER ASDF ZXCV 操作"></canvas>
+    </div>
+    <p id="status" class="status" role="status" aria-live="polite">載入中…</p>
+
+    <div class="row controls">
+      <button id="btn-toggle" type="button" class="primary" disabled>暫停</button>
+      <button id="btn-step" type="button" disabled title="執行一個指令 (F10)">單步</button>
+      <button id="btn-frame" type="button" disabled title="執行一個 60Hz frame,計時器會減 1">下一個 frame</button>
+      <button id="btn-reset" type="button" disabled>重設</button>
+    </div>
+
+    <div class="row settings">
+      <label class="field grow">速度
+        <span class="range"><input id="speed" type="range" min="100" max="3000" step="50" value="700"><output id="speed-out">700</output></span>
+        <span class="unit">指令/秒</span>
+      </label>
+      <label class="field">配色
+        <select id="theme"></select>
+      </label>
+      <label class="field small">前景 <input id="fg" type="color" value="#8fd694"></label>
+      <label class="field small">背景 <input id="bg" type="color" value="#0f2418"></label>
+      <label class="check"><input id="sound" type="checkbox" checked> 聲音</label>
+      <label class="check" title="把上一個 frame 的亮點多留一個 frame,減少擦掉再重畫造成的閃爍"><input id="smooth" type="checkbox" checked> 減少閃爍</label>
+    </div>
+
+    <div id="keypad" class="keypad" role="group" aria-label="16 鍵觸控鍵盤"></div>
+  </section>
+
+  <!-- 編輯區 -->
+  <section class="pane" id="pane-editor" aria-labelledby="h-editor">
+    <h2 id="h-editor">程式</h2>
+    <div class="row toolbar">
+      <label class="field">範例
+        <select id="example"></select>
+      </label>
+      <button id="btn-run" type="button" class="primary" title="Ctrl/⌘ + Enter">組譯並執行</button>
+      <button id="btn-download" type="button">下載 .ch8</button>
+      <label class="filebtn">載入 .ch8<input id="file" type="file" accept=".ch8,.bin,.rom,application/octet-stream"></label>
+    </div>
+    <p id="example-hint" class="hint"></p>
+
+    <div class="editor" id="editor">
+      <div class="gutter" id="gutter" role="group" aria-label="行號。點行號可設定或取消中斷點"></div>
+      <div class="scroller">
+        <div class="hl" id="hl" hidden></div>
+        <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off"
+          aria-label="CHIP-8 組合語言原始碼"></textarea>
+      </div>
+    </div>
+    <p class="hint">點行號 = 設中斷點(或在游標所在行按 F9)。Tab 縮排;按 Esc 再按 Tab 可離開編輯區。</p>
+    <div id="messages" class="messages" role="status" aria-live="polite"></div>
+
+    <details class="help">
+      <summary>組合語言語法速查</summary>
+      <div class="help-body">
+<pre>; 分號後面是註解
+.equ SPEED, 5        ; 常數
+.reg x v0            ; 暫存器別名
+start:               ; 標籤
+    ld x, 10         ; v0 = 10
+    ld i, ball       ; I = ball 的位址
+    drw x, x, 4      ; 畫 4 列 sprite
+    jp start
+ball:
+    .px ".##."       ; 用像素畫 sprite
+    .px "####"
+    .db 0x3C, 0b0101, "hi"   ; 原始資料
+    .dw 0x1234       ; 16 位元資料
+    .ds 8            ; 保留 8 個位元組
+    .org 0x300       ; 往後填空到指定位址</pre>
+        <table>
+          <thead><tr><th>指令</th><th>意思</th></tr></thead>
+          <tbody>
+            <tr><td><code>cls</code> <code>ret</code> <code>exit</code></td><td>清畫面、返回、結束程式</td></tr>
+            <tr><td><code>jp 位址</code> <code>jp v0, 位址</code> <code>call 位址</code></td><td>跳躍、加偏移跳躍、呼叫子程式</td></tr>
+            <tr><td><code>se</code> <code>sne</code> <code>skp</code> <code>sknp</code></td><td>條件跳過下一行:相等、不等、按鍵按下、按鍵沒按</td></tr>
+            <tr><td><code>ld vx, 值|vy</code> <code>ld i, 位址</code></td><td>載入</td></tr>
+            <tr><td><code>ld vx, dt</code> <code>ld dt|st, vx</code> <code>ld vx, k</code></td><td>讀寫計時器、等待按鍵</td></tr>
+            <tr><td><code>ld f|hf|b, vx</code> <code>ld [i], vx</code> <code>ld vx, [i]</code></td><td>字型位址、BCD、批次存取記憶體</td></tr>
+            <tr><td><code>add</code> <code>or</code> <code>and</code> <code>xor</code> <code>sub</code> <code>subn</code> <code>shr</code> <code>shl</code></td><td>算術與位元運算</td></tr>
+            <tr><td><code>rnd vx, 遮罩</code> <code>drw vx, vy, 高度</code></td><td>亂數、畫 sprite</td></tr>
+            <tr><td><code>high</code> <code>low</code> <code>scd n</code> <code>scr</code> <code>scl</code></td><td>SUPER-CHIP:高/低解析度、捲動</td></tr>
+          </tbody>
+        </table>
+        <p>數字可寫 <code>10</code>、<code>0x0A</code>、<code>0b1010</code>,也可以用 <code>+ - * / &amp; | &lt;&lt; &gt;&gt;</code> 與括號組成運算式。負數會轉成補數,所以 <code>add v0, -1</code> 就是減 1。</p>
+      </div>
+    </details>
+  </section>
+
+  <!-- 除錯 -->
+  <section class="pane" id="pane-debug" aria-labelledby="h-debug">
+    <h2 id="h-debug">除錯</h2>
+    <div class="debug-grid">
+      <div>
+        <h3>暫存器</h3>
+        <div id="regs" class="regs"></div>
+        <dl id="specials" class="specials"></dl>
+      </div>
+      <div>
+        <h3>堆疊</h3>
+        <ol id="stack" class="stack" start="0"></ol>
+      </div>
+    </div>
+    <h3>反組譯(從 PC 開始)</h3>
+    <ol id="disasm" class="disasm" aria-label="從 PC 開始的反組譯"></ol>
+    <h3>記憶體</h3>
+    <div class="row mem-bar">
+      <label class="field">顯示位置
+        <select id="mem-mode">
+          <option value="pc">跟著 PC</option>
+          <option value="i">跟著 I</option>
+          <option value="addr">指定位址</option>
+        </select>
+      </label>
+      <label class="field small">位址 0x<input id="mem-addr" type="text" value="200" size="4" maxlength="3" inputmode="text" aria-label="記憶體起始位址(十六進位)"></label>
+    </div>
+    <pre id="mem" class="mem" tabindex="0" aria-label="記憶體內容"></pre>
+  </section>
+
+  <!-- Quirks -->
+  <section class="pane" id="pane-quirks" aria-labelledby="h-quirks">
+    <h2 id="h-quirks">相容性(Quirks)</h2>
+    <p class="hint">不同年代的 CHIP-8 直譯器對幾個指令的行為不同。ROM 跑起來怪怪的時,試試換一組。</p>
+    <label class="field">預設組合
+      <select id="preset">
+        <option value="cosmac">COSMAC VIP(1977 原版)</option>
+        <option value="modern">現代(Octo 風格)</option>
+        <option value="schip">SUPER-CHIP</option>
+        <option value="custom" hidden>自訂</option>
+      </select>
+    </label>
+    <div id="quirks" class="quirks"></div>
+  </section>
+</main>
+
+<footer class="foot wrap">
+  <p>CHIP-8 Studio · MIT 授權 · <a href="https://github.com/useless-husband/chip8-studio">原始碼</a> · 範例程式皆為原創,沒有附帶任何有版權的 ROM。</p>
+</footer>
+
+<script>
+  if (location.protocol === 'file:') document.getElementById('file-warning').hidden = false;
+</script>
+<script type="module" src="src/app.js"></script>
+</body>
+</html>
