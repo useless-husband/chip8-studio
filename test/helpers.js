@@ -19,3 +19,14 @@ export function pixel(cpu, x, y) {
 export function countPixels(cpu) {
   return cpu.display.reduce((a, b) => a + b, 0);
 }
+
+// 固定種子的 xorshift32 亂數，讓依賴 RND 指令的範例測試每次結果都一樣
+export function seededRandom(seed = 1) {
+  let x = seed >>> 0 || 1;
+  return () => {
+    x ^= x << 13; x >>>= 0;
+    x ^= x >>> 17;
+    x ^= x << 5; x >>>= 0;
+    return x & 0xff;
+  };
+}

@@ -5,11 +5,11 @@ import { assemble, formatError } from '../src/assembler.js';
 import { Chip8, QUIRK_PRESETS } from '../src/cpu.js';
 import { runFrames, runFrame } from '../src/runner.js';
 import { EXAMPLES } from '../src/examples.js';
-import { countPixels, pixel } from './helpers.js';
+import { countPixels, pixel, seededRandom } from './helpers.js';
 
 const source = (ex) => readFileSync(new URL('../' + ex.file, import.meta.url), 'utf8');
 
-function boot(id, preset = 'modern', random) {
+function boot(id, preset = 'modern', random = seededRandom(1)) {
   const ex = EXAMPLES.find((e) => e.id === id);
   const r = assemble(source(ex));
   assert.equal(r.ok, true, r.errors.map(formatError).join('\n'));
