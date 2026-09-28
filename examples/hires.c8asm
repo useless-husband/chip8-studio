@@ -1,0 +1,70 @@
+; hires.c8asm — SUPER-CHIP 128x64 高解析度示範
+; 示範:high(切換高解析)、大字型(ld hf)、16x16 sprite(drw x, y, 0)、捲動。
+; 操作:鍵 4 往左捲、鍵 6 往右捲、鍵 8 往下捲、鍵 5 回到 64x32 低解析度。
+
+start:
+    high
+    ld v2, 0          ; 上面一排大字型 0-9
+    ld v3, 4
+    ld v4, 4
+digits:
+    ld hf, v2
+    drw v3, v4, 10
+    add v3, 12
+    add v2, 1
+    se v2, 10
+    jp digits
+
+    ld i, face        ; 中間畫一張 16x16 的笑臉
+    ld v3, 56
+    ld v4, 28
+    drw v3, v4, 0
+
+main:
+    ld v0, 4
+    sknp v0
+    scl
+    ld v0, 6
+    sknp v0
+    scr
+    ld v0, 8
+    sknp v0
+    scd 2
+    ld v0, 5
+    sknp v0
+    jp lowres
+    ld v1, 2          ; 每次捲動間隔 2/60 秒
+    ld dt, v1
+tick:
+    ld v1, dt
+    se v1, 0
+    jp tick
+    jp main
+
+lowres:
+    low
+    cls
+    ld v0, 0
+    ld v1, 12
+    ld f, v0          ; 低解析度下用一般字型寫個 0
+    drw v0, v1, 5
+done:
+    jp done
+
+face:
+    .px ".....######....."
+    .px "...##########..."
+    .px "..############.."
+    .px ".##############."
+    .px ".###..####..###."
+    .px ".###..####..###."
+    .px "################"
+    .px "################"
+    .px "################"
+    .px "##.##########.##"
+    .px "###.########.###"
+    .px ".####......####."
+    .px ".##############."
+    .px "..############.."
+    .px "...##########..."
+    .px ".....######....."

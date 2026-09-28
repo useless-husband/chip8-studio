@@ -1,0 +1,74 @@
+; keytest.c8asm — 字型與鍵盤測試
+; 畫面上排出 16 個十六進位字型(0-F),排列和實體鍵盤一樣:
+;     1 2 3 C        對應電腦鍵盤   1 2 3 4
+;     4 5 6 D                       Q W E R
+;     7 8 9 E                       A S D F
+;     A 0 B F                       Z X C V
+; 按下某個鍵,對應字型下方會出現一條底線,放開就消失。
+; 可以用來確認鍵盤與觸控鍵盤有沒有接好。
+
+.equ ROW, 3           ; 每個鍵在表格裡佔 3 個位元組:鍵值、x、y
+.equ END, 48          ; 16 x 3
+
+start:
+    ld v5, 0
+draw_glyphs:          ; 先把 16 個字型畫出來
+    ld i, keytab
+    add i, v5
+    ld v2, [i]        ; v0 = 鍵值、v1 = x、v2 = y
+    ld f, v0
+    drw v1, v2, 5
+    add v5, ROW
+    se v5, END
+    jp draw_glyphs
+
+scan:                 ; 一直掃描 16 個鍵,狀態有變才畫底線
+    ld v5, 0
+next_key:
+    ld i, keytab
+    add i, v5
+    ld v2, [i]
+    ld v6, v0         ; v6 = 鍵值
+    ld i, state
+    add i, v6
+    ld v0, [i]
+    ld v4, v0         ; v4 = 上次狀態
+    ld v7, 0          ; v7 = 現在狀態
+    sknp v6
+    ld v7, 1
+    sne v7, v4        ; 沒變就略過
+    jp skip
+    ld v0, v7         ; 記住新狀態
+    ld i, state
+    add i, v6
+    ld [i], v0
+    ld i, underline   ; XOR 畫底線:按下時出現,放開時再畫一次就消失
+    add v2, 5
+    drw v1, v2, 1
+skip:
+    add v5, ROW
+    se v5, END
+    jp next_key
+    jp scan
+
+keytab:
+    .db 0x1, 8, 2
+    .db 0x2, 22, 2
+    .db 0x3, 36, 2
+    .db 0xC, 50, 2
+    .db 0x4, 8, 10
+    .db 0x5, 22, 10
+    .db 0x6, 36, 10
+    .db 0xD, 50, 10
+    .db 0x7, 8, 18
+    .db 0x8, 22, 18
+    .db 0x9, 36, 18
+    .db 0xE, 50, 18
+    .db 0xA, 8, 26
+    .db 0x0, 22, 26
+    .db 0xB, 36, 26
+    .db 0xF, 50, 26
+underline:
+    .px "####"
+state:
+    .ds 16

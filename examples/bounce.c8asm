@@ -1,0 +1,67 @@
+; bounce.c8asm — 彈跳球
+; 一顆 4x4 的球在螢幕裡彈來彈去,碰到牆壁會嗶一聲。
+; 用來示範:暫存器別名(.reg)、常數(.equ)、sprite、計時器、子程式。
+
+.reg x  v0            ; 球的位置
+.reg y  v1
+.reg dx v2            ; 每一格移動量:1 是往右/下,0xFF(也就是 -1)是往左/上
+.reg dy v3
+.reg t  v4            ; 暫用
+
+.equ MAX_X, 60        ; 螢幕寬 64,球寬 4
+.equ MAX_Y, 28        ; 螢幕高 32,球高 4
+.equ DELAY, 1         ; 每幾個 60Hz 週期移動一次
+
+start:
+    ld x, 10
+    ld y, 5
+    ld dx, 1
+    ld dy, 1
+    ld i, ball
+    drw x, y, 4       ; 先把球畫出來
+
+loop:
+    ld t, DELAY       ; 用延遲計時器控制速度
+    ld dt, t
+wait:
+    ld t, dt
+    se t, 0
+    jp wait
+
+    drw x, y, 4       ; 再畫一次 = 擦掉舊的球(XOR)
+    add x, dx
+    add y, dy
+
+    se x, 0           ; 撞到左牆
+    jp check_right
+    ld dx, 1
+    call beep
+check_right:
+    se x, MAX_X       ; 撞到右牆
+    jp check_top
+    ld dx, -1
+    call beep
+check_top:
+    se y, 0
+    jp check_bottom
+    ld dy, 1
+    call beep
+check_bottom:
+    se y, MAX_Y
+    jp draw
+    ld dy, -1
+    call beep
+draw:
+    drw x, y, 4
+    jp loop
+
+beep:
+    ld t, 3           ; 蜂鳴器響 3/60 秒
+    ld st, t
+    ret
+
+ball:
+    .px ".##."
+    .px "####"
+    .px "####"
+    .px ".##."

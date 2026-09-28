@@ -1,0 +1,260 @@
+; pong.c8asm — 乒乓球
+; 左邊玩家:1 鍵往上、Q 鍵往下(CHIP-8 鍵 1 與 4)
+; 右邊玩家:4 鍵往上、R 鍵往下(CHIP-8 鍵 C 與 D)
+; 先拿到 9 分獲勝。預設右邊由電腦操控;想雙人對戰,把 ld ai, 1 改成 ld ai, 0。
+
+.reg lp v2            ; 左球拍 y
+.reg rp v3            ; 右球拍 y
+.reg bx v4            ; 球
+.reg by v5
+.reg bdx v6           ; 球速度:x 每次 2 格,y 每次 1 格(0xFE / 0xFF 是負的)
+.reg bdy v7
+.reg ls v8            ; 左邊得分
+.reg rs v9            ; 右邊得分
+.reg ai va            ; 1 = 右邊由電腦控制
+.reg fc vb            ; frame 計數器
+.reg t  v0            ; 暫用
+.reg u  v1
+
+.equ TOP, 8           ; 球拍 y 的範圍 8..24
+.equ BOTTOM, 24
+.equ WIN, 9
+
+start:
+    cls
+    ld ls, 0
+    ld rs, 0
+    ld ai, 1          ; 改成 0 就是雙人模式
+    ld fc, 0
+    ld lp, 14
+    ld rp, 14
+    call draw_border
+    call draw_lp
+    call draw_rp
+    call draw_scores
+    ld bdx, 2
+    call serve
+
+main:
+    ld t, 1           ; 每個 frame 跑一次(60 次/秒)
+    ld dt, t
+w:  ld t, dt
+    se t, 0
+    jp w
+
+    call draw_ball    ; 先擦掉球
+
+    ld t, 1           ; 左球拍
+    sknp t
+    call lp_up
+    ld t, 4
+    sknp t
+    call lp_down
+    ld t, 0xC         ; 右球拍
+    sknp t
+    call rp_up
+    ld t, 0xD
+    sknp t
+    call rp_down
+
+    add fc, 1         ; 電腦:每 4 個 frame 追球一格
+    se ai, 1
+    jp move_ball
+    ld t, fc
+    ld u, 3
+    and t, u
+    se t, 0
+    jp move_ball
+    ld t, by          ; 球在球拍中心上方 -> 往上
+    ld u, rp
+    add u, 2
+    sub t, u
+    se vf, 0
+    jp ai_down
+    call rp_up
+    jp move_ball
+ai_down:
+    ld t, rp          ; 球在球拍中心下方 -> 往下
+    add t, 3
+    sub t, by
+    se vf, 0
+    jp move_ball
+    call rp_down
+
+move_ball:
+    add bx, bdx
+    add by, bdy
+    se by, TOP        ; 上下牆壁反彈
+    jp not_top
+    ld bdy, 1
+not_top:
+    se by, 29
+    jp not_bottom
+    ld bdy, -1
+not_bottom:
+    se bx, 1          ; 球飛出左邊 -> 右邊得分
+    jp not_left
+    jp right_scores
+not_left:
+    se bx, 63         ; 球飛出右邊 -> 左邊得分
+    jp not_right
+    jp left_scores
+not_right:
+    call draw_ball
+    se vf, 1          ; 球和球拍重疊了嗎?
+    jp main
+    call draw_ball    ; 重疊:擦掉、退回一步、反向
+    sub by, bdy
+    ld t, 0
+    sub t, bdx
+    ld bdx, t
+    add bx, bdx
+    rnd t, 1          ; 隨機改變上下方向,讓球路有變化
+    sne t, 1
+    ld bdy, 1
+    se t, 1
+    ld bdy, -1
+    call draw_ball
+    call beep
+    jp main
+
+left_scores:
+    call draw_scores  ; 擦掉舊分數
+    add ls, 1
+    call draw_scores
+    ld bdx, 2
+    jp after_score
+right_scores:
+    call draw_scores
+    add rs, 1
+    call draw_scores
+    ld bdx, -2
+after_score:
+    call beep
+    se ls, WIN
+    jp check_right_win
+    jp game_over
+check_right_win:
+    se rs, WIN
+    jp next_serve
+    jp game_over
+next_serve:
+    call serve
+    jp main
+
+game_over:
+    ld t, 30
+    ld st, t
+    ld t, 120         ; 停兩秒再重新開始
+    ld dt, t
+go_wait:
+    ld t, dt
+    se t, 0
+    jp go_wait
+    jp start
+
+; ---- 子程式 ----
+
+serve:                ; 球放到中線,y 隨機,停半秒再開始
+    ld bx, 31
+    rnd by, 0x0F
+    add by, 10
+    ld bdy, 1
+    call draw_ball
+    ld t, 30
+    ld dt, t
+sv_wait:
+    ld t, dt
+    se t, 0
+    jp sv_wait
+    ret
+
+draw_ball:
+    ld i, ball_sprite
+    drw bx, by, 2
+    ret
+
+draw_lp:
+    ld i, paddle_sprite
+    ld t, 2
+    drw t, lp, 6
+    ret
+
+draw_rp:
+    ld i, paddle_sprite
+    ld t, 60
+    drw t, rp, 6
+    ret
+
+draw_scores:
+    ld u, 1
+    ld f, ls
+    ld t, 20
+    drw t, u, 5
+    ld f, rs
+    ld t, 40
+    drw t, u, 5
+    ret
+
+draw_border:          ; 上下各一條橫線
+    ld i, hline
+    ld t, 0
+db_loop:
+    ld u, 7
+    drw t, u, 1
+    ld u, 31
+    drw t, u, 1
+    add t, 8
+    se t, 64
+    jp db_loop
+    ret
+
+lp_up:
+    sne lp, TOP
+    ret
+    call draw_lp
+    add lp, -2
+    call draw_lp
+    ret
+
+lp_down:
+    sne lp, BOTTOM
+    ret
+    call draw_lp
+    add lp, 2
+    call draw_lp
+    ret
+
+rp_up:
+    sne rp, TOP
+    ret
+    call draw_rp
+    add rp, -2
+    call draw_rp
+    ret
+
+rp_down:
+    sne rp, BOTTOM
+    ret
+    call draw_rp
+    add rp, 2
+    call draw_rp
+    ret
+
+beep:
+    ld t, 4
+    ld st, t
+    ret
+
+paddle_sprite:
+    .px "##"
+    .px "##"
+    .px "##"
+    .px "##"
+    .px "##"
+    .px "##"
+ball_sprite:
+    .px "##"
+    .px "##"
+hline:
+    .px "########"

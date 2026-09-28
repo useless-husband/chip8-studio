@@ -1,0 +1,223 @@
+; snake.c8asm — 貪食蛇
+; 方向:W(CHIP-8 鍵 5)上、S(鍵 8)下、A(鍵 7)左、D(鍵 9)右。
+; 吃到食物會變長、加一分。撞牆或撞到自己就結束,畫面顯示分數,
+; 按任意鍵重新開始。
+;
+; 畫面 64x32 被切成 32x16 的格子,每格 2x2 像素。
+; 蛇身的每一格座標(x, y)存在 body 這塊記憶體裡,當成環狀佇列:
+; hh 指向蛇頭、th 指向蛇尾,每格佔 2 個位元組。
+
+.reg hx  v2           ; 蛇頭座標(格子)
+.reg hy  v3
+.reg dx  v4           ; 目前前進方向
+.reg dy  v5
+.reg th  v6           ; 蛇尾在 body 裡的位移
+.reg hh  v7           ; 蛇頭在 body 裡的位移
+.reg fx  v8           ; 食物座標
+.reg fy  v9
+.reg score va
+.reg ate vb           ; 這一步有沒有吃到食物
+.reg ndx vc           ; 玩家按鍵決定的「下一步方向」
+.reg ndy vd
+
+.equ SPEED, 5         ; 每幾個 60Hz 週期走一步,數字越小越快
+.equ MASK, 0x7E       ; 環狀佇列的位移遮罩(最多 64 節)
+.equ WIN_SCORE, 60
+
+start:
+    cls
+    ld hx, 16
+    ld hy, 8
+    ld dx, 1
+    ld dy, 0
+    ld ndx, 1
+    ld ndy, 0
+    ld th, 0
+    ld hh, 0
+    ld score, 0
+    ld v0, hx         ; 把蛇頭寫進 body[0]
+    ld v1, hy
+    ld i, body
+    ld [i], v1
+    call plot_head
+    call new_food
+
+game:
+    ld v0, SPEED      ; 等一步的時間,同時一直讀鍵盤
+    ld dt, v0
+poll:
+    call read_keys
+    ld v0, dt
+    se v0, 0
+    jp poll
+
+    ld dx, ndx
+    ld dy, ndy
+    add hx, dx        ; 算出新蛇頭
+    add hy, dy
+    ld v0, hx         ; 撞牆?x 必須在 0..31,y 必須在 0..15
+    ld v1, 0xE0
+    and v0, v1
+    se v0, 0
+    jp dead
+    ld v0, hy
+    ld v1, 0xF0
+    and v0, v1
+    se v0, 0
+    jp dead
+
+    ld ate, 0         ; 新蛇頭剛好在食物上嗎?
+    se hx, fx
+    jp no_food
+    se hy, fy
+    jp no_food
+    ld ate, 1
+no_food:
+    se ate, 1
+    call plot_tail    ; 沒吃到:蛇尾縮一格
+    call plot_head    ; 畫新蛇頭。VF=1 代表碰到了東西
+    se ate, 1
+    jp check_hit
+
+    call plot_head    ; 吃到食物:剛剛的 XOR 把食物和蛇頭抵消了,再畫一次點亮
+    add score, 1
+    ld v0, 3
+    ld st, v0
+    se score, WIN_SCORE
+    jp grow
+    call store_head
+    jp dead           ; 60 分:蛇塞滿環狀佇列,遊戲結束
+grow:
+    call store_head
+    call new_food
+    jp game
+
+check_hit:
+    se vf, 1          ; 沒吃到卻碰到東西 = 撞到自己
+    jp ok
+    jp dead
+ok:
+    call store_head
+    jp game
+
+dead:
+    ld v0, 30
+    ld st, v0
+    call show_score
+    ld v0, k          ; 等按下一個鍵
+    jp start
+
+; ---- 子程式 ----
+
+read_keys:            ; 只根據「目前方向」轉彎,所以不會原地迴轉
+    ld v0, 5
+    sknp v0
+    call go_up
+    ld v0, 8
+    sknp v0
+    call go_down
+    ld v0, 7
+    sknp v0
+    call go_left
+    ld v0, 9
+    sknp v0
+    call go_right
+    ret
+
+go_up:
+    se dy, 0
+    ret
+    ld ndx, 0
+    ld ndy, -1
+    ret
+go_down:
+    se dy, 0
+    ret
+    ld ndx, 0
+    ld ndy, 1
+    ret
+go_left:
+    se dx, 0
+    ret
+    ld ndx, -1
+    ld ndy, 0
+    ret
+go_right:
+    se dx, 0
+    ret
+    ld ndx, 1
+    ld ndy, 0
+    ret
+
+plot_head:            ; 在 (hx, hy) 畫一格
+    ld v0, hx
+    add v0, v0        ; 格子座標 x2 = 像素座標
+    ld v1, hy
+    add v1, v1
+    ld i, cell
+    drw v0, v1, 2
+    ret
+
+plot_food:
+    ld v0, fx
+    add v0, v0
+    ld v1, fy
+    add v1, v1
+    ld i, cell
+    drw v0, v1, 2
+    ret
+
+plot_tail:            ; 擦掉蛇尾,蛇尾往前一格
+    ld i, body
+    add i, th
+    ld v1, [i]        ; v0 = x, v1 = y
+    add v0, v0
+    add v1, v1
+    ld i, cell
+    drw v0, v1, 2
+    add th, 2
+    ld v0, MASK
+    and th, v0
+    ret
+
+store_head:           ; 把新蛇頭寫進 body
+    add hh, 2
+    ld v0, MASK
+    and hh, v0
+    ld v0, hx
+    ld v1, hy
+    ld i, body
+    add i, hh
+    ld [i], v1
+    ret
+
+new_food:             ; 亂數放食物,若壓到蛇身就還原重抽
+    rnd fx, 0x1F
+    rnd fy, 0x0F
+    call plot_food
+    se vf, 1
+    ret
+    call plot_food
+    jp new_food
+
+show_score:           ; 清畫面,用內建字型顯示分數
+    cls
+    ld i, digits
+    ld b, score
+    ld v2, [i]        ; v1 = 十位數、v2 = 個位數
+    ld f, v1
+    ld v3, 24
+    ld v4, 13
+    drw v3, v4, 5
+    ld f, v2
+    ld v3, 34
+    drw v3, v4, 5
+    ret
+
+cell:
+    .px "##"
+    .px "##"
+digits:
+    .ds 3
+body:
+    .ds 128

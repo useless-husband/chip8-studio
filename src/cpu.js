@@ -52,7 +52,7 @@ export const QUIRK_PRESETS = {
     loadStoreIncrementI: false,
     jumpWithOffset: false,
     vfReset: false,
-    displayWait: true,
+    displayWait: false,
     clipping: true,
   },
   // SUPER-CHIP 1.1 的行為
